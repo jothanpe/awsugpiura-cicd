@@ -51,6 +51,14 @@ export class PipelineStack extends Stack {
           'npm test',
           'npx cdk synth',
         ],
+        // El `cdk synth` se vuelve a ejecutar AQUÍ (en CodeBuild), pero el repo
+        // no incluye el .env (está en .gitignore). Inyectamos los valores —que
+        // no son secretos— al entorno del build para que app.ts los encuentre.
+        env: {
+          GITHUB_REPO: props.repoString,
+          GITHUB_BRANCH: props.branch,
+          CODESTAR_CONNECTION_ARN: props.connectionArn,
+        },
       }),
     });
 
