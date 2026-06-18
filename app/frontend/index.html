@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CI/CD cloud-native · AWS UG Piura</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="card">
+      <header>
+        <span class="badge">AWS UG Piura</span>
+        <h1>CI/CD cloud-native 🚀</h1>
+        <p class="subtitle">
+          Frontend en <strong>S3 + CloudFront</strong>, backend en
+          <strong>Lambda</strong>. Desplegado por <strong>CodePipeline</strong>.
+        </p>
+      </header>
+
+      <section class="status" id="status">
+        <div class="spinner"></div>
+        <span>Llamando al backend…</span>
+      </section>
+
+      <section class="result" id="result" hidden>
+        <div class="row">
+          <span class="label">Mensaje</span>
+          <span class="value" id="message">—</span>
+        </div>
+        <div class="row">
+          <span class="label">Versión</span>
+          <span class="value pill" id="version">—</span>
+        </div>
+        <div class="row">
+          <span class="label">Commit</span>
+          <span class="value" id="commit">—</span>
+        </div>
+        <div class="row">
+          <span class="label">Timestamp</span>
+          <span class="value" id="timestamp">—</span>
+        </div>
+        <details>
+          <summary>Respuesta cruda (JSON)</summary>
+          <pre id="raw">—</pre>
+        </details>
+      </section>
+
+      <button id="refresh">↻ Volver a llamar al backend</button>
+
+      <footer>
+        <code id="apiUrl">backend: —</code>
+      </footer>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
