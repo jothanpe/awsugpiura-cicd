@@ -18,12 +18,16 @@ export interface PipelineStackProps extends StackProps {
 
 /**
  * Stack del pipeline. Usa CDK Pipelines, que internamente crea:
- *   - Un AWS CodePipeline (source -> build -> deploy, self-mutating).
- *   - Proyectos de AWS CodeBuild para el `synth` y para el self-mutate.
+ *   - Un AWS CodePipeline (source -> build -> deploy).
+ *   - Un proyecto de AWS CodeBuild para el `synth`.
  *   - Un bucket S3 para artefactos.
  *
  * El source es GitHub vía CodeConnection (sin webhooks ni tokens en código).
  * Cada push a `main` arranca el pipeline automáticamente.
+ *
+ * NOTA: self-mutation desactivado a propósito. El pipeline se despliega una vez
+ * a mano (`npm run deploy`) y a partir de ahí solo cambia el código de `app/`.
+ * Si en el futuro cambias la DEFINICIÓN del pipeline, vuelve a `npm run deploy`.
  */
 export class PipelineStack extends Stack {
   constructor(scope: Construct, id: string, props: PipelineStackProps) {
@@ -35,8 +39,9 @@ export class PipelineStack extends Stack {
 
     const pipeline = new CodePipeline(this, 'Pipeline', {
       pipelineName: 'cicd101-pipeline',
-      // El pipeline se actualiza a sí mismo si cambias su definición (self-mutation).
-      selfMutation: true,
+      // Sin self-mutation: el pipeline no se actualiza a sí mismo. Suficiente
+      // para este flujo, donde solo cambia el código de la aplicación.
+      selfMutation: false,
       synth: new ShellStep('Synth', {
         input: source,
         // Esto corre dentro de CodeBuild: instala, prueba, compila y sintetiza.

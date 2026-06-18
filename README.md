@@ -18,11 +18,10 @@ flowchart LR
     Dev([👩‍💻 Developer]) -->|git push main| GH[GitHub Repo]
     GH -->|CodeConnection| CP[AWS CodePipeline]
 
-    subgraph Pipeline [AWS CodePipeline · self-mutating]
+    subgraph Pipeline [AWS CodePipeline]
         direction LR
         S[Source\nGitHub] --> B["Build / Synth\n(CodeBuild)\nnpm ci · build · test · cdk synth"]
-        B --> M["SelfMutate\n(CodeBuild)\nactualiza el pipeline"]
-        M --> D["Deploy Prod\n(CloudFormation)"]
+        B --> D["Deploy Prod\n(CloudFormation)"]
     end
 
     CP --> Pipeline
@@ -57,8 +56,8 @@ flowchart LR
 | **CloudWatch Logs** | Logs con retención de 7 días | centavos |
 
 > 💡 La pieza clave es **CDK Pipelines** (`aws-cdk-lib/pipelines`): con ~30 líneas
-> describimos un CodePipeline *self-mutating* que usa CodeBuild por debajo. No
-> escribimos buildspecs ni configuramos webhooks a mano.
+> describimos un CodePipeline que usa CodeBuild por debajo. No escribimos
+> buildspecs ni configuramos webhooks a mano.
 
 ---
 
@@ -197,14 +196,14 @@ del `.env`: repo, connection ARN y perfil de AWS:
 npm run deploy
 ```
 
-> A partir de aquí **ya no vuelves a hacer `deploy` a mano**. El pipeline se
-> encarga de todo. Incluso si cambias la definición del propio pipeline, este se
-> actualiza solo (*self-mutation*) en la siguiente ejecución.
+> A partir de aquí **ya no vuelves a hacer `deploy` a mano** para cambios de la
+> app: cada `git push` a `main` dispara el pipeline y despliega `app/` solo.
+> (Solo si cambias la *definición del pipeline* vuelves a correr `npm run deploy`.)
 
 ### Paso 7 — Verificar el despliegue
 
 Ve a la consola de **CodePipeline** y observa cómo corre:
-`Source → Build → UpdatePipeline → Deploy`. Al terminar, en los outputs de
+`Source → Build → Deploy`. Al terminar, en los outputs de
 CloudFormation (stack `Prod-App`) encontrarás:
 
 - **FrontendUrl** → la URL de CloudFront (esto abres en el navegador).
