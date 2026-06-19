@@ -18,11 +18,11 @@ flowchart LR
     Dev([👩‍💻 Developer]) -->|git push main| GH[GitHub Repo]
     GH -->|CodeConnection| CP[AWS CodePipeline]
 
-    subgraph Pipeline [AWS CodePipeline · self-mutating]
+    subgraph Pipeline [AWS CodePipeline]
         direction LR
         S[Source\nGitHub] --> B["Build / Synth\n(CodeBuild)\nnpm ci · build · test · cdk synth"]
-        B --> M["UpdatePipeline\n+ Assets\n(publica a S3)"]
-        M --> D["Deploy Prod\n(CloudFormation)"]
+        B --> A["Assets\n(publica a S3)"]
+        A --> D["Deploy Prod\n(CloudFormation)"]
     end
 
     CP --> Pipeline
@@ -56,8 +56,8 @@ flowchart LR
 | **CloudWatch Logs** | Logs con retención de 7 días | centavos |
 
 > 💡 La pieza clave es **CDK Pipelines** (`aws-cdk-lib/pipelines`): con ~30 líneas
-> describimos un CodePipeline *self-mutating* que usa CodeBuild por debajo. No
-> escribimos buildspecs ni configuramos webhooks a mano.
+> describimos un CodePipeline que usa CodeBuild por debajo. No escribimos
+> buildspecs ni configuramos webhooks a mano.
 
 ---
 
@@ -191,10 +191,9 @@ npm run bootstrap
 ```
 
 > 🩹 Si al desplegar el frontend ves `aws s3 cp ... returned non-zero exit
-> status 1`, suele ser que **el asset no se publicó**. Asegúrate de tener
-> `selfMutation: true` (default) en el pipeline: ese paso mantiene la etapa de
-> Assets en sync. Si lo cambiaste, vuelve a `npm run deploy`. Como segunda
-> causa, un bootstrap viejo: corre `npm run bootstrap` (idempotente).
+> status 1`, suele ser **cifrado KMS** en el bucket de assets (común en cuentas
+> corporativas): el rol del `BucketDeployment` necesita `kms:Decrypt`. Ya está
+> resuelto en `frontend-stack.ts` (ver el `PolicyStatement` con `kms:Decrypt`).
 
 ### Paso 6 — Desplegar el pipeline
 

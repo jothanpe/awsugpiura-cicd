@@ -25,10 +25,10 @@ export interface PipelineStackProps extends StackProps {
  * El source es GitHub vía CodeConnection (sin webhooks ni tokens en código).
  * Cada push a `main` arranca el pipeline automáticamente.
  *
- * NOTA: self-mutation ACTIVADO (default). No es opcional en la práctica: el
- * paso de self-mutation mantiene sincronizada la etapa de Assets, que publica
- * a S3 los assets de la app (frontend, bundle de la Lambda) antes del Deploy.
- * Sin él, al cambiar la app los assets nuevos no se publican y el Deploy falla.
+ * NOTA: self-mutation desactivado. El pipeline se despliega una vez a mano
+ * (`npm run deploy`) y a partir de ahí solo cambia el código de `app/`. La etapa
+ * de Assets publica los assets nuevos en cada corrida igual. Si cambias la
+ * DEFINICIÓN del pipeline, vuelve a `npm run deploy`.
  */
 export class PipelineStack extends Stack {
   constructor(scope: Construct, id: string, props: PipelineStackProps) {
@@ -40,9 +40,9 @@ export class PipelineStack extends Stack {
 
     const pipeline = new CodePipeline(this, 'Pipeline', {
       pipelineName: 'cicd101-pipeline',
-      // Self-mutation activado (default). Mantiene la etapa de Assets en sync
-      // para que los assets nuevos de la app se publiquen antes del Deploy.
-      selfMutation: true,
+      // Sin self-mutation: el pipeline no se actualiza a sí mismo. Suficiente
+      // para este flujo, donde solo cambia el código de la aplicación.
+      selfMutation: false,
       synth: new ShellStep('Synth', {
         input: source,
         // Esto corre dentro de CodeBuild: instala, prueba, compila y sintetiza.
