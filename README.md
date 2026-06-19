@@ -18,10 +18,11 @@ flowchart LR
     Dev([👩‍💻 Developer]) -->|git push main| GH[GitHub Repo]
     GH -->|CodeConnection| CP[AWS CodePipeline]
 
-    subgraph Pipeline [AWS CodePipeline]
+    subgraph Pipeline [AWS CodePipeline · self-mutating]
         direction LR
         S[Source\nGitHub] --> B["Build / Synth\n(CodeBuild)\nnpm ci · build · test · cdk synth"]
-        B --> D["Deploy Prod\n(CloudFormation)"]
+        B --> M["UpdatePipeline\n+ Assets\n(publica a S3)"]
+        M --> D["Deploy Prod\n(CloudFormation)"]
     end
 
     CP --> Pipeline
@@ -55,8 +56,8 @@ flowchart LR
 | **CloudWatch Logs** | Logs con retención de 7 días | centavos |
 
 > 💡 La pieza clave es **CDK Pipelines** (`aws-cdk-lib/pipelines`): con ~30 líneas
-> describimos un CodePipeline que usa CodeBuild por debajo. No escribimos
-> buildspecs ni configuramos webhooks a mano.
+> describimos un CodePipeline *self-mutating* que usa CodeBuild por debajo. No
+> escribimos buildspecs ni configuramos webhooks a mano.
 
 ---
 
@@ -189,10 +190,11 @@ Solo la 1ra vez por cuenta/región. Usa el perfil/región del `.env` gracias a
 npm run bootstrap
 ```
 
-> 🩹 Si al desplegar el frontend ves un error del custom resource del tipo
-> `aws s3 cp ... returned non-zero exit status 1`, casi siempre es un **bootstrap
-> viejo** (al `BucketDeployment` le falta permiso sobre el bucket de assets).
-> Vuelve a correr `npm run bootstrap` (es idempotente) y re-dispara el pipeline.
+> 🩹 Si al desplegar el frontend ves `aws s3 cp ... returned non-zero exit
+> status 1`, suele ser que **el asset no se publicó**. Asegúrate de tener
+> `selfMutation: true` (default) en el pipeline: ese paso mantiene la etapa de
+> Assets en sync. Si lo cambiaste, vuelve a `npm run deploy`. Como segunda
+> causa, un bootstrap viejo: corre `npm run bootstrap` (idempotente).
 
 ### Paso 6 — Desplegar el pipeline
 
