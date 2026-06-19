@@ -25,21 +25,21 @@ flowchart LR
     end
 
     CP --> Pipeline
-    D -->|despliega| APP
+    D -->|despliega 2 stacks| APP
 
-    subgraph APP [Stack de aplicación · capa gratuita]
+    subgraph APP [Aplicación · 2 stacks independientes · capa gratuita]
         direction TB
-        CF[CloudFront\nHTTPS] --> S3[(S3\nsitio estático\nprivado)]
-        L[λ Lambda\nNode.js 22 · ARM64] --- U[Function URL\n+ CORS]
+        S3[(S3\nsitio estático\nPaso 1: Frontend)]
+        L[λ Lambda + Function URL\nNode.js 22 · ARM64\nPaso 2: Backend]
     end
 
-    User([🌐 Usuario]) -->|HTTPS| CF
-    User -.->|fetch API\nvia config.json| U --> L
+    User([🌐 Usuario]) -->|HTTP| S3
+    User2([🌐 Usuario]) -->|HTTPS| L
 ```
 
-> **Flujo en el navegador:** CloudFront sirve el frontend (HTML/CSS/JS) desde
-> S3. El JS lee `config.json` (generado por CDK con la URL real del backend) y
-> hace `fetch` a la **Lambda Function URL**, que responde con CORS habilitado.
+> **Frontend y backend son independientes.** El sitio en S3 es estático y
+> autónomo (no llama al backend), y la Lambda se abre por su Function URL. Así
+> cada uno se despliega como un paso separado, sin acoplamiento.
 
 **Servicios usados (todos serverless):**
 
@@ -49,10 +49,9 @@ flowchart LR
 | **AWS CodePipeline** | Orquesta source → build → deploy | $0 (1ra pipeline V1 gratis/mes) |
 | **AWS CodeBuild** | Ejecuta `npm ci/build/test/cdk synth` | $0 (100 min/mes gratis) |
 | **AWS CloudFormation** | Aplica los cambios de infraestructura | $0 |
-| **Amazon S3** | Hospeda el frontend (privado) + artefactos | $0 / centavos |
-| **Amazon CloudFront** | Sirve el frontend por HTTPS | $0 (1 TB + 10M req/mes gratis) |
+| **Amazon S3** | Hospeda el frontend (static website) + artefactos | $0 / centavos |
 | **AWS Lambda** | Backend (handler en TypeScript) | $0 (1M req/mes gratis) |
-| **Lambda Function URL** | Expone la Lambda por HTTPS + CORS | $0 (sin API Gateway) |
+| **Lambda Function URL** | Expone la Lambda por HTTPS | $0 (sin API Gateway) |
 | **CloudWatch Logs** | Logs con retención de 7 días | centavos |
 
 > 💡 La pieza clave es **CDK Pipelines** (`aws-cdk-lib/pipelines`): con ~30 líneas
@@ -73,18 +72,19 @@ CICD101/
 │   │   └── app.ts             # Entry point del CDK app
 │   ├── lib/
 │   │   ├── pipeline-stack.ts      # El pipeline (CodePipeline + CodeBuild)
-│   │   ├── application-stage.ts   # Stage desplegable (agrupa stacks)
-│   │   └── application-stack.ts   # Lambda + S3 + CloudFront
+│   │   ├── application-stage.ts   # Agrupa los 2 stacks de la app
+│   │   ├── frontend-stack.ts      # Paso 1: sitio estático en S3
+│   │   └── backend-stack.ts       # Paso 2: Lambda + Function URL
 │   └── test/
-│       └── application-stack.test.ts  # Tests de infraestructura
+│       └── application.test.ts    # Tests de infraestructura
 │
 ├── app/                       # 📦  APLICACIÓN (lo que se despliega)
 │   ├── backend/
 │   │   └── handler.ts         # Lambda en TypeScript
-│   └── frontend/              # Sitio estático servido por CloudFront
+│   └── frontend/              # Sitio estático (autónomo)
 │       ├── index.html
 │       ├── styles.css
-│       └── app.js             # Lee config.json y llama al backend
+│       └── app.js             # Solo muestra la hora de carga
 │
 ├── cdk.json                   # app: infra/bin/app.ts
 ├── package.json               # único (raíz): npm ci · build · test · cdk synth
@@ -97,8 +97,10 @@ CICD101/
   se despliega 1 sola vez a mano; el resto lo aplica el pipeline.
 - `app/` → el **código que se despliega** (backend + frontend). Sin dependencias
   propias: la Lambda la empaqueta CDK con esbuild y el frontend es estático.
-- `app/frontend/` se sube a S3 con `BucketDeployment`. CDK añade un `config.json`
-  con la URL del backend, así el frontend nunca tiene la URL hardcodeada.
+- El frontend y el backend son **dos stacks independientes** (`Prod-Frontend` y
+  `Prod-Backend`), así el pipeline los despliega como **dos pasos separados**.
+- `app/frontend/` se sube a S3 con `BucketDeployment` (sitio estático, sin
+  CloudFront para mantenerlo simple).
 
 ---
 
@@ -187,6 +189,11 @@ Solo la 1ra vez por cuenta/región. Usa el perfil/región del `.env` gracias a
 npm run bootstrap
 ```
 
+> 🩹 Si al desplegar el frontend ves un error del custom resource del tipo
+> `aws s3 cp ... returned non-zero exit status 1`, casi siempre es un **bootstrap
+> viejo** (al `BucketDeployment` le falta permiso sobre el bucket de assets).
+> Vuelve a correr `npm run bootstrap` (es idempotente) y re-dispara el pipeline.
+
 ### Paso 6 — Desplegar el pipeline
 
 Despliega **el pipeline** (no la app: el pipeline desplegará la app). Todo sale
@@ -203,14 +210,11 @@ npm run deploy
 ### Paso 7 — Verificar el despliegue
 
 Ve a la consola de **CodePipeline** y observa cómo corre:
-`Source → Build → Deploy`. Al terminar, en los outputs de
-CloudFormation (stack `Prod-App`) encontrarás:
+`Source → Build → Deploy`. El paso Deploy despliega **dos stacks** (Frontend y
+Backend). En sus outputs de CloudFormation encontrarás:
 
-- **FrontendUrl** → la URL de CloudFront (esto abres en el navegador).
-- **BackendFunctionUrl** → la API (Lambda) que consume el frontend.
-
-> ⏳ La **primera** vez, crear la distribución de CloudFront toma ~3–5 min extra
-> (es de una sola vez). Los despliegues siguientes solo invalidan la caché (~1 min).
+- `Prod-Frontend` → **FrontendUrl** → el sitio en S3 (esto abres en el navegador).
+- `Prod-Backend` → **BackendFunctionUrl** → la API (Lambda), si quieres probarla aparte.
 
 ---
 
@@ -247,8 +251,8 @@ necesitas flags `-c` ni `--profile`. Para pasar flags extra usa `--`, p. ej.
 ## 🧹 Limpieza
 
 ```bash
-# Borra la app desplegada por el pipeline (usa el perfil del .env)
-npm run destroy -- Prod-App
+# Borra los dos stacks de la app (usa el perfil del .env)
+npm run destroy -- Prod-Frontend Prod-Backend
 
 # Borra el pipeline
 npm run destroy -- CICD101-Pipeline
